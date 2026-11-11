@@ -188,11 +188,11 @@ class Bullet(pygame.sprite.Sprite):
             if player.alive:
                 player.health -= 5
                 self.kill()
-        
-        if pygame.sprite.spritecollide(enemy, bullet_group, False):
-            if enemy.alive:
-                enemy.health -= 25
-                self.kill()
+        for enemy in enemy_group:
+            if pygame.sprite.spritecollide(enemy, bullet_group, False):
+                if enemy.alive:
+                    enemy.health -= 25
+                    self.kill()
 
 
 class Grenade(pygame.sprite.Sprite):
@@ -295,8 +295,10 @@ while run:
     player.update()
     player.draw()
 
-    enemy.update()
-    enemy.draw()
+
+    for enemy in enemy_group:
+        enemy.update()
+        enemy.draw()
 
 
 
