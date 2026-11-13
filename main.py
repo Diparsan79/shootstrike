@@ -32,6 +32,10 @@ grenade = False
 grenade_thrown = False
 
 #load images
+pine1_img = pygame.image.load('img/Background/pine1.png').convert_alpha()
+pine2_img = pygame.image.load('img/Background/pine1.png').convert_alpha()
+mountain_img = pygame.image.load('img/Background/mountain.png').convert_alpha()
+sky_img = pygame.image.load('img/Background/sky_cloud.png').convert_alpha()
 #store tiles in a list
 img_list = []
 for x in range(TILE_TYPES):
@@ -76,7 +80,10 @@ def draw_text(text, font,text_col, x,y):
 
 def draw_bg():
     screen.fill(BG)
-    pygame.draw.line(screen, BLACK, (0, 300), (SCREEN_WIDTH, 300))
+    screen.blit(sky_img, (0, 0))
+    screen.blit(mountain_img, (0, SCREEN_HEIGHT - mountain_img.get_height() - 300))
+    screen.blit(pine1_img, (0, SCREEN_HEIGHT -pine1_img.get_height() - 150))
+    screen.blit(pine2_img, (0, SCREEN_HEIGHT - pine2_img.get_height()))
 
 class Soldier(pygame.sprite.Sprite):
     def __init__(self,char_type,  x,y,scale, speed, ammo, grenades):
@@ -125,6 +132,8 @@ class Soldier(pygame.sprite.Sprite):
         self.image = self.animation_list[self.action][self.frame_index]
         self.rect = self.image.get_rect()
         self.rect.center = (x,y)  
+        self.width = self.image.get_width()
+        self.height = self.image.get_height()
 
     def update(self):
         self.update_animation()
@@ -149,7 +158,7 @@ class Soldier(pygame.sprite.Sprite):
 
         #jump
         if self.jump == True and self.in_air == False:
-            self.vel_y = -11
+            self.vel_y = -12
             self.jump = False
             self.in_air = True
 
@@ -160,9 +169,23 @@ class Soldier(pygame.sprite.Sprite):
         dy += self.vel_y
 
         #check for collision
-        if self.rect.bottom + dy > 300:
-            dy = 300 - self.rect.bottom
-            self.in_air = False
+        for tile in  world.obstacle_list:
+            #check collision in the x direction
+            if tile[1].colliderect(self.rect.x + dx, self.rect.y, self.width, self.height):
+                dx = 0
+
+            #check follision in the y direction
+            if tile[1].colliderect(self.rect.x, self.rect.y + dy , self.width, self.height):
+                #check if jumping
+                if self.vel_y < 0:
+                    self.vel_y = 0
+                    dy = tile[1].bottom - self.rect.top
+                #check if above the ground
+                elif self.vel_y >= 0:
+                    self.vel_y = 0
+                    self.in_air = False
+                    dy = tile[1].top - self.rect.bottom
+
 
         #update rect postn
         self.rect.x += dx
@@ -383,6 +406,12 @@ class Bullet(pygame.sprite.Sprite):
         if self.rect.right < 0 or self.rect.left > SCREEN_WIDTH:
             self.kill()
 
+
+        #check for collision with level
+        for tile in world.obstacle_list:
+            if tile[1].colliderect(self.rect):
+                self.kill()
+
         #check collision with characters
 
         if pygame.sprite.spritecollide(player, bullet_group, False):
@@ -405,6 +434,8 @@ class Grenade(pygame.sprite.Sprite):
         self.image = grenade_img
         self.rect = self.image.get_rect()
         self.rect.center = (x,y)
+        self.width = self.image.get_width()
+        self.height = self.image.get_height()
         self.direction = direction
 
     def update(self):
@@ -412,11 +443,23 @@ class Grenade(pygame.sprite.Sprite):
         dx = self.direction * self.speed
         dy = self.vel_y
 
-
-         #check collision with floor
-        if self.rect.bottom + dy > 300:
-            dy = 300 - self.rect.bottom
-            self.speed = 0
+        #check for collision with level
+        for tile in world.obstacle_list:
+            #check collision with walls
+            if tile[1].colliderect(self.rect.x + dx , self.rect.y, self.width, self.height):
+                self.direction *= -1
+                dx = self.direction * self.speed
+            #check for collisoin in y direction
+            if tile[1].colliderect(self.rect.x, self.rect.y + dy , self.width , self.height):
+                self.speed = 0
+                #check if thrown up
+                if self.vel_y < 0:
+                    self.vel_y = 0
+                    dy = tile[1].bottom - self.rect.top
+                #check if above the ground
+                elif self.vel_y >= 0:
+                    self.vel_y = 0
+                    dy = tile[1].top - self.rect.bottom
 
         #check collision with walls or sides of screen
         if self.rect.left + dx < 0 or self.rect.right + dx > SCREEN_WIDTH:
