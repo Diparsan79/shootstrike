@@ -274,40 +274,6 @@ class TextButton:
         return action
 
     
-#Button class
-class Button():
-    def __init__(self,x,y,image, scale):
-        width = image.get_width()
-        height = image.get_height()
-        self.image = pygame.transform.scale(image, (int(width * scale), int(height * scale)))
-        self.rect = self.image.get_rect()
-        self.rect.topleft = (x,y)
-        self.clicked = False
-
-
-    def draw(self, surface):
-        action = False
-
-        #get mouse position
-        pos = pygame.mouse.get_pos()
-
-
-        #check mouseover and clicked conditions
-        if self.rect.collidepoint(pos):
-            if pygame.mouse.get_pressed()[0] == 1 and self.clicked == False:
-                action = True
-                self.clicked = True
-
-        if pygame.mouse.get_pressed()[0] == 0:
-            self.clicked = False
-
-
-            #draw button
-        surface.blit(self.image, (self.rect.x , self.rect.y))
-
-        return action
-
-
 
 class Soldier(pygame.sprite.Sprite):
     def __init__(self,char_type,  x,y,scale, speed, ammo, grenades):
@@ -519,6 +485,9 @@ class Soldier(pygame.sprite.Sprite):
     
     def draw(self):
         screen.blit(pygame.transform.flip(self.image,self.flip ,False), self.rect)
+        if self.char_type =='enemy' and self.alive and self.health < self.max_health:
+            pygame.draw.rect(screen, (60, 20, 20), (self.rect.x, self.rect.y - 10, self.rect.width , 5))
+            pygame.draw.rect(screen, RED, (self.rect.x, self.rect.y - 10, self.rect.width * self.health / self.max_health, 5))
 
 
 class World():
@@ -747,6 +716,8 @@ class Grenade(pygame.sprite.Sprite):
         if self.timer <= 0:
             self.kill()
             shake = 12
+            spawn_particles(self.rect.centerx, self.rect.centery, (255, 140, 40), 30)
+            spawn_particles(self.rect.centerx, self.rect.centery , (255, 220, 90), 15)
             grenade_fx.play()
             explosion = Explosion(self.rect.centerx, self.rect.centery, 0.5)
             explosion_group.add(explosion)
@@ -943,8 +914,10 @@ while run:
         draw_text(ammo_text, font, WHITE, 10, ammo_y)
         ammo_w, ammo_h = font.size(ammo_text)
         bullet_y = ammo_y + (ammo_h - bullet_img.get_height()) // 2
-        for x in range(player.ammo):
+        for x in range(min(player.ammo, 20)):
             screen.blit(bullet_img, (10 + ammo_w + (x * 10), bullet_y))
+        if player.ammo > 20:
+            draw_text(f'x{player.ammo}', font, WHITE , 10 + ammo_w + 210, ammo_y)
 
         # show grenades
         grenade_text = 'GRENADES: '
@@ -1064,6 +1037,9 @@ while run:
                 moving_right = True
             if event.key == pygame.K_SPACE:
                 shoot = True
+            if event.key == pygame.K_m:
+                muted = not muted
+                pygame.mixer.music.set_volume(0 if muted else 0.3)
             if event.key == pygame.K_q:
                 grenade = True
             if event.key ==pygame.K_w and player.alive and not player.in_air:
@@ -1074,12 +1050,7 @@ while run:
                     show_howto = False
                 else:
                     run = False
-    if shake > 0:
-        offset = (random.randint(-shake , shake), (random.randint(-shake, shake)))
-        frame = screen.copy()
-        screen.fill(BLACK)
-        screen.blit(frame, offset)
-        shake -= 1
+
 
         #keyboard button release
         if event.type == pygame.KEYUP:
@@ -1092,10 +1063,12 @@ while run:
             if event.key == pygame.K_q:
                 grenade = False
                 grenade_thrown = False
-    
+    if shake > 0:
+        offset = (random.randint(-shake , shake), (random.randint(-shake, shake)))
+        frame = screen.copy()
+        screen.fill(BLACK)
+        screen.blit(frame, offset)
+        shake -= 1
     pygame.display.update()
-
-
-
 
 pygame.quit()
