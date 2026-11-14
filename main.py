@@ -25,12 +25,13 @@ ROWS = 16
 COLS = 150
 TILE_SIZE = SCREEN_HEIGHT // ROWS
 TILE_TYPES =21
-MAX_LEVELS = 3
+MAX_LEVELS = 2
 screen_scroll = 0
 bg_scroll = 0
 level = 1
 start_game = False
 start_intro = False
+game_won = False
 
 #define player action variables
 moving_left = False
@@ -60,7 +61,7 @@ restart_img = pygame.image.load('img/restart_btn.png').convert_alpha()
 
 #background
 pine1_img = pygame.image.load('img/Background/pine1.png').convert_alpha()
-pine2_img = pygame.image.load('img/Background/pine1.png').convert_alpha()
+pine2_img = pygame.image.load('img/Background/pine2.png').convert_alpha()
 mountain_img = pygame.image.load('img/Background/mountain.png').convert_alpha()
 sky_img = pygame.image.load('img/Background/sky_cloud.png').convert_alpha()
 #store tiles in a list
@@ -96,8 +97,9 @@ WHITE = (255,255,255)
 GREEN = (0 , 255, 0)
 PINK = (235, 65, 54)
 
-#define dont
+#define font
 font = pygame.font.SysFont('Futura', 30)
+title_font = pygame.font.SysFont('Futura', 60)
 
 def draw_text(text, font,text_col, x,y):
     img = font.render(text, True, text_col)
@@ -133,6 +135,18 @@ def reset_level():
         world_data.append(r)
 
     return world_data
+
+def load_level(level_num):
+    data = reset_level()
+    with open (f'level{level_num}_data.csv', newline='') as csvfile:
+        for x, row in enumerate(reader):
+            for y , tile in enumerate(row):
+                data[x][y] = int(tile)
+    new_world = World()
+    new_player, new_health_bar = new_world.process_data(data)
+    return data, new_world, new_player, new_health_bar
+
+
 
 #Button class
 class Button():
@@ -250,7 +264,7 @@ class Soldier(pygame.sprite.Sprite):
         #apply gravity
         self.vel_y += GRAVITY
         if self.vel_y >10:
-            self.vel_y
+            self.vel_y = 10
         dy += self.vel_y
 
         #check for collision
@@ -318,41 +332,32 @@ class Soldier(pygame.sprite.Sprite):
 
     def ai(self):
         if self.alive and player.alive:
-            if random.randint(1, 100) == 1:
+            self.vision.center = (self.rect.centerx + 75 * self.direction, self.rect.centery)
+
+            if not self.idling and random.randint(1, 200) == 1:
                 self.idling = True
-                self.update_action(0) 
-                self.idling_counter = 50
-            #check if the ai is near the player
-            if self.vision.colliderect(player.rect):
-                #stop running and face the player
                 self.update_action(0)
-                #shoot
+                self.idling_counter = 50
+
+            #check if ai is seeing player
+            if self.vision.colliderect(player.rect):
+                self.update_action(0)
                 self.shoot()
             else:
-
-                if self.idling == False:
-                    if self.direction == 1:
-                        ai_moving_right = True
-                    else:
-                        ai_moving_right = False
+                if not self.idling:
+                    ai_moving_right = (self.direction == 1)
                     ai_moving_left = not ai_moving_right
                     self.move(ai_moving_left, ai_moving_right)
-                    self.update_action(1) # now the ai should show run animation
+                    self.update_action(1)
                     self.move_counter += 1
-                    #update ai vsion as enemy moves
-                    self.vision.center = (self.rect.centerx + 75 * self.direction, self.rect.centery)
-
-
 
                     if self.move_counter > TILE_SIZE:
                         self.direction *= -1
-                        self.move_counter *= -1
-                else:
-                    self.idling_counter -= 1
-                    if self.idling_counter <= 0:
-                        self.idling = False
-
-        #scroll
+                        self.move_counter = 0
+                    else:
+                        self.idling_counter -= 1
+                        if self.idling_counter <= 0:
+                            self.idling = False
         self.rect.x += screen_scroll
 
 
@@ -544,12 +549,12 @@ class Bullet(pygame.sprite.Sprite):
 
         #check collision with characters
 
-        if pygame.sprite.spritecollide(player, bullet_group, False):
+        if player.alive and pygame.sprite.collide_rect(self, player):
             if player.alive:
                 player.health -= 5
                 self.kill()
         for enemy in enemy_group:
-            if pygame.sprite.spritecollide(enemy, bullet_group, False):
+            if player.alive and pygame.sprite.collide_rect(self, enemy):
                 if enemy.alive:
                     enemy.health -= 25
                     self.kill()
@@ -570,6 +575,8 @@ class Grenade(pygame.sprite.Sprite):
 
     def update(self):
         self.vel_y += GRAVITY
+        if self.vel_y > 10:
+            self.vel_y = 10
         dx = self.direction * self.speed
         dy = self.vel_y
 
@@ -606,13 +613,13 @@ class Grenade(pygame.sprite.Sprite):
         if self.timer <= 0:
             self.kill()
             grenade_fx.play()
-            explosion = Explosion(self.rect.x, self.rect.y, 0.5)
+            explosion = Explosion(self.rect.centerx, self.rect.centery, 0.5)
             explosion_group.add(explosion)
             #do damage to anyone that is nearby
-            if abs(self.rect.centerx - player.rect.centerx)< TILE_SIZE * 2 and abs(self.rect.centery - player.rect.centery) < TILE_SIZE * 2:
+            if  player.alive and (abs(self.rect.centerx - player.rect.centerx)< TILE_SIZE * 2 and abs(self.rect.centery - player.rect.centery) < TILE_SIZE * 2):
                 player.health -= 50
             for enemy in enemy_group:
-                if abs(self.rect.centerx - enemy.rect.centerx) < TILE_SIZE * 2 and abs(self.rect.centery - enemy.rect.centery) < TILE_SIZE * 2:
+                if enemy.alive and (abs(self.rect.centerx - enemy.rect.centerx) < TILE_SIZE * 2 and abs(self.rect.centery - enemy.rect.centery) < TILE_SIZE * 2):
                     enemy.health -= 50
 
 
@@ -649,7 +656,7 @@ class Explosion(pygame.sprite.Sprite):
                 self.image = self.images[self.frame_index]
 
 class ScreenFade():
-    def __init(self, direction, color, speed):
+    def __init__(self, direction, color, speed):
         self.direction = direction
         self.color = color
         self.speed = speed
@@ -725,13 +732,21 @@ while run:
             start_intro = True
         if exit_button.draw(screen):
             run = False
+    elif game_won:
+        screen.fill(BG)
+        draw_text('MISSION COMPLETE!!', title_font, WHITE, SCREEN_WIDTH// 2 - 230, SCREEN_HEIGHT // 2 - 160)
+        if restart_button.draw(screen):
+            game_won = False
+            level = 1
+            bg_scroll = True
+            start_intro = True
+            world_data, world, player, health_bar = load_level(level)
     else:
 
         draw_bg()
         #draw world map
         world.draw()
-        #show player health
-        health_bar.draw(player.health)
+
     # show player health
         health_bar.draw(player.health)
 
@@ -808,8 +823,7 @@ while run:
             else:
                 player.update_action(0) #0 is idle
             screen_scroll, level_complete = player.move(moving_left, moving_right)
-            bg_scroll -= screen_scroll 
-            #check if player has completed thelevel
+            bg_scroll = max(0, bg_scroll - screen_scroll)            #check if player has completed thelevel
             if level_complete:
                 start_intro = True
                 level += 1
@@ -861,7 +875,7 @@ while run:
                 shoot = True
             if event.key == pygame.K_q:
                 grenade = True
-            if event.key ==pygame.K_w and player.alive:
+            if event.key ==pygame.K_w and player.alive and not player.in_air:
                 player.jump = True
                 jump_fx.play()
             if event.key == pygame.K_ESCAPE:
