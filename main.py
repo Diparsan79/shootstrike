@@ -25,7 +25,7 @@ ROWS = 16
 COLS = 150
 TILE_SIZE = SCREEN_HEIGHT // ROWS
 TILE_TYPES =21
-MAX_LEVELS = 2
+MAX_LEVELS = 10
 screen_scroll = 0
 bg_scroll = 0
 level = 1
@@ -111,7 +111,7 @@ def draw_text(text, font,text_col, x,y):
 def draw_bg():
     screen.fill(BG)
     width = sky_img.get_width()
-    for x in range(5):
+    for x in range(20):
         screen.blit(sky_img, ((x * width) - bg_scroll * 0.5, 0))
         screen.blit(mountain_img, ((x * width) - bg_scroll * 0.6, SCREEN_HEIGHT - mountain_img.get_height() - 300))
         screen.blit(pine1_img, ((x * width) - bg_scroll * 0.7, SCREEN_HEIGHT -pine1_img.get_height() - 150))
@@ -139,6 +139,7 @@ def reset_level():
 def load_level(level_num):
     data = reset_level()
     with open (f'level{level_num}_data.csv', newline='') as csvfile:
+        reader = csv.reader(csvfile, delimiter=',')
         for x, row in enumerate(reader):
             for y , tile in enumerate(row):
                 data[x][y] = int(tile)
@@ -314,7 +315,7 @@ class Soldier(pygame.sprite.Sprite):
 
         #update scroll based on player position
         if self.char_type  == 'player':
-            if (self.rect.right > SCREEN_WIDTH - SCROLL_THRESH and bg_scroll < (world.level_length * TILE_SIZE) - SCREEN_WIDTH) or (self.rect.left < SCROLL_THRESH and bg_scroll > dx):
+            if (self.rect.right > SCREEN_WIDTH - SCROLL_THRESH and bg_scroll < (world.level_length * TILE_SIZE) - SCREEN_WIDTH) or (self.rect.left < SCROLL_THRESH and bg_scroll > abs(dx)):
                 self.rect.x -= dx
                 screen_scroll = -dx
 
@@ -324,7 +325,7 @@ class Soldier(pygame.sprite.Sprite):
     def shoot(self):
         if self.shoot_cooldown == 0 and self.ammo >0:
             self.shoot_cooldown = 50
-            bullet = Bullet(self.rect.centerx + (0.75 * self.rect.size[0] * self.direction), self.rect.centery, self.direction)
+            bullet = Bullet(self.rect.centerx + (0.75 * self.rect.size[0] * self.direction), self.rect.centery, self.direction, self)
             bullet_group.add(bullet)
             #reduce ammo
             self.ammo -= 1
@@ -354,10 +355,10 @@ class Soldier(pygame.sprite.Sprite):
                     if self.move_counter > TILE_SIZE:
                         self.direction *= -1
                         self.move_counter = 0
-                    else:
-                        self.idling_counter -= 1
-                        if self.idling_counter <= 0:
-                            self.idling = False
+                else:
+                    self.idling_counter -= 1
+                    if self.idling_counter <= 0:
+                        self.idling = False
         self.rect.x += screen_scroll
 
 
@@ -525,13 +526,14 @@ class HealthBar():
 
 #Bullet class
 class Bullet(pygame.sprite.Sprite):
-    def __init__(self,x,y,direction):
+    def __init__(self,x,y,direction, owner):
         pygame.sprite.Sprite.__init__(self)
         self.speed = 10
         self.image = bullet_img
         self.rect = self.image.get_rect()
         self.rect.center = (x,y)
         self.direction = direction 
+        self.owner = owner
 
 
     def update(self):
@@ -549,13 +551,13 @@ class Bullet(pygame.sprite.Sprite):
 
         #check collision with characters
 
-        if player.alive and pygame.sprite.collide_rect(self, player):
-            if player.alive:
+        if self.owner.char_type == 'enemy':
+            if player.alive and pygame.sprite.collide_rect(self, player):
                 player.health -= 5
                 self.kill()
-        for enemy in enemy_group:
-            if player.alive and pygame.sprite.collide_rect(self, enemy):
-                if enemy.alive:
+        else:
+            for enemy in enemy_group:
+                if enemy.alive and pygame.sprite.collide_rect(slef, enemy):
                     enemy.health -= 25
                     self.kill()
 
@@ -738,7 +740,7 @@ while run:
         if restart_button.draw(screen):
             game_won = False
             level = 1
-            bg_scroll = True
+            bg_scroll = 0
             start_intro = True
             world_data, world, player, health_bar = load_level(level)
     else:
@@ -830,15 +832,9 @@ while run:
                 bg_scroll = 0
                 world_data = reset_level()
                 if level <= MAX_LEVELS:
-                    #load in level data and create world
-                    with open(f'level{level}_data.csv', newline = '') as csvfile:
-                        reader = csv.reader(csvfile, delimiter = ',')
-                        for x, row in enumerate(reader):
-                            for y , tile in enumerate(row):
-                                world_data[x][y] = int(tile)
-
-                    world = World()
-                    player, health_bar = world.process_data(world_data)
+                    world_data, world, player, health_bar = load_level(level)
+                else:
+                    game_won = True
 
         else:
             screen_scroll = 0
