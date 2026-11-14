@@ -3,6 +3,7 @@ from pygame import mixer
 import os
 import random
 import csv
+import math
 
 mixer.init()
 pygame.init()
@@ -32,6 +33,8 @@ level = 1
 start_game = False
 start_intro = False
 game_won = False
+show_howto = False
+menu_drift = 0
 
 #define player action variables
 moving_left = False
@@ -88,6 +91,8 @@ item_boxes = {
     'Grenade': grenade_box_img
 }
 
+#explosion
+explosion_imgs = [pygame.image.load(f'img/explosion/exp{n}.png').convert_alpha() for n in range(1, 6)]
 
 #define colours
 BG = (144, 201, 120)
@@ -98,8 +103,8 @@ GREEN = (0 , 255, 0)
 PINK = (235, 65, 54)
 
 #define font
-font = pygame.font.SysFont('Futura', 30)
-title_font = pygame.font.SysFont('Futura', 60)
+font = pygame.font.Font('font/MotionControl-Bold.otf', 30)
+title_font = pygame.font.Font('font/MotionControl-Bold.otf', 60)
 
 def draw_text(text, font,text_col, x,y):
     img = font.render(text, True, text_col)
@@ -147,8 +152,35 @@ def load_level(level_num):
     new_player, new_health_bar = new_world.process_data(data)
     return data, new_world, new_player, new_health_bar
 
+class TextButton:
+    def __init__(self, x,y,w,h,text, font):
+        self.rect = pygame.Rect(x,y,w,h)
+        self.text, self.font = text, font
+        self.hover = 0.0
+        self.clicked = False
 
+    def draw(self, surface):
+        over = self.rect.collidepoint(pygame.mouse.get_pos())
+        target = 1.0 if over else 0.0
+        self.hover += (target - self.hover) * 0.2
+        r = self.rect.inflate(int(self.hover * 12), int(self.hover * 6))
+        base , lit = (40, 60, 45), (90, 160, 90)
+        col = tuple(int(b + (l - b) * self.hover) for b, l in zip(base, lit))
+        pygame.draw.rect(surface, col, r, border_radius=12)
+        pygame.draw.rect(surface, WHITE, r, 3, border_radius = 12)
+        label = self.font.render(self.text, True, WHITE)
+        surface.blit(label, label.get_rect(center=r.center))
 
+        action = False
+        pressed = pygame.mouse.get_pressed()[0]
+        if over and pressed and not self.clicked:
+            action = True
+            self.clicked = True
+        if not pressed:
+            self.clicked = False
+        return action
+
+    
 #Button class
 class Button():
     def __init__(self,x,y,image, scale):
@@ -173,8 +205,8 @@ class Button():
                 action = True
                 self.clicked = True
 
-            if pygame.mouse.get_pressed()[0] == 0:
-                self.clicked = False
+        if pygame.mouse.get_pressed()[0] == 0:
+            self.clicked = False
 
 
             #draw button
@@ -628,11 +660,8 @@ class Grenade(pygame.sprite.Sprite):
 class Explosion(pygame.sprite.Sprite):
     def __init__(self,x,y,scale):
         pygame.sprite.Sprite.__init__(self)
-        self.images = []
-        for num in range(1,6):
-            img = pygame.image.load(f'img/explosion/exp{num}.png').convert_alpha()
-            img = pygame.transform.scale(img, (int((img.get_width() * scale)), int(img.get_height() * scale)))
-            self.images.append(img)
+        self.images = [pygame.transform.scale(i, (int(i.get_width() * scale), int(i.get_height() * scale)))
+                       for i in explosion_imgs]
         self.frame_index = 0
         self.image = self.images[self.frame_index]
         self.rect = self.image.get_rect()
@@ -809,7 +838,7 @@ while run:
             if shoot:
                 player.shoot()
             #throw grenades
-            elif grenade and grenade_thrown == False and player.grenades > 0:
+            if grenade and grenade_thrown == False and player.grenades > 0:
                 grenade = Grenade(player.rect.centerx + (0.5 * player.rect.size[0] * player.direction), player.rect.top, player.direction)
                 grenade_group.add(grenade)
                 #reduce grenades
