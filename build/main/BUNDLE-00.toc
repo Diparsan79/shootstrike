@@ -1,0 +1,3 @@
+([('main',
+   '/Users/diparsanpathak/Documents/gamesdsd/dist/main',
+   'EXECUTABLE')],)
